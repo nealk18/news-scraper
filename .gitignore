@@ -20,3 +20,10 @@ Thumbs.db
 *.crt
 id_*
 .ssh/
+
+.ssh/
+id_*
+*.pem
+*.key
+*.ppk
+.env
