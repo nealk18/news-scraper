@@ -1,3 +1,22 @@
-
-# Python venv
+# Python
+__pycache__/
+*.py[cod]
 .venv/
+venv/
+build/
+dist/
+
+# OS & Editer Junk
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.crt
+id_*
+.ssh/
