@@ -1,12 +1,10 @@
 # ----- OS junk -----
 .DS_Store
 Thumbs.db
-
 # ----- Editors / IDE -----
 .vscode/
 .idea/
 *.code-workspace
-
 # ----- Python -----
 .venv/
 venv/
@@ -19,7 +17,6 @@ __pycache__/
 build/
 dist/
 .cache/
-
 # ----- Testing / Type Checking / Coverage -----
 .pytest_cache/
 .mypy_cache/
@@ -30,10 +27,8 @@ dist/
 coverage.xml
 htmlcov/
 coverage/
-
 # ----- Notebooks -----
 .ipynb_checkpoints/
-
 # ----- Env & secrets (VERY IMPORTANT) -----
 .env
 .env.*
@@ -49,7 +44,6 @@ id_*.pub
 *.ppk
 *.p12
 *.crt
-
 # ----- Local data / logs -----
 *.sqlite
 *.sqlite3
@@ -58,17 +52,14 @@ data/
 tmp/
 logs/
 *.log
-
 # ----- Playwright artifacts -----
 playwright-report/
 test-results/
-
 # ----- Node / Next.js (if you add a UI) -----
 node_modules/
 .next/
 .out/
 dist/
-
 # ----- Misc -----
 .python-version
 .envrc
