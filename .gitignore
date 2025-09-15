@@ -1,29 +1,74 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-build/
-dist/
-
-# OS & Editer Junk
+# ----- OS junk -----
 .DS_Store
 Thumbs.db
-.vscode/
 
-# Secrets
+# ----- Editors / IDE -----
+.vscode/
+.idea/
+*.code-workspace
+
+# ----- Python -----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+.cache/
+
+# ----- Testing / Type Checking / Coverage -----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.coverage*
+coverage.xml
+htmlcov/
+coverage/
+
+# ----- Notebooks -----
+.ipynb_checkpoints/
+
+# ----- Env & secrets (VERY IMPORTANT) -----
 .env
 .env.*
-*.pem
-*.key
-*.p12
-*.crt
-id_*
+.secrets/
 .ssh/
-
-.ssh/
-id_*
+id_rsa
+id_ecdsa
+id_ed25519
+id_dsa
+id_*.pub
 *.pem
 *.key
 *.ppk
-.env
+*.p12
+*.crt
+
+# ----- Local data / logs -----
+*.sqlite
+*.sqlite3
+*.db
+data/
+tmp/
+logs/
+*.log
+
+# ----- Playwright artifacts -----
+playwright-report/
+test-results/
+
+# ----- Node / Next.js (if you add a UI) -----
+node_modules/
+.next/
+.out/
+dist/
+
+# ----- Misc -----
+.python-version
+.envrc
