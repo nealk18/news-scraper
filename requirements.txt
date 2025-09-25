@@ -1,2 +1,8 @@
 playwright >= 1.46
 trafilatura >= 1.8
+
+urllib3<2
+
+fastapi >= 0.115
+uvicorn[standard] >= 0.30
+pydantic >= 2.7
