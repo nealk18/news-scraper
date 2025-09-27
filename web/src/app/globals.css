@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme {
+  --brand: #7c3aed;             
+  --brand-foreground: #ffffff;
+
+  
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter,
+                "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+                "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+
+  --radius-md: 0.5rem;
+  --radius-xl: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --brand: #8b5cf6; 
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
