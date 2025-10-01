@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 type Article = {
   url: string;
@@ -14,343 +14,399 @@ type Article = {
   word_count: number;
 };
 
-type ApiResponse = {
+type ArticlesResponse = {
   items: Article[];
   total: number;
   page: number;
   page_size: number;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
-
-function classNames(...xs: Array<string | false | undefined>) {
-  return xs.filter(Boolean).join(" ");
-}
-
-function formatDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso || "—";
-  }
-}
-
-function scoreColor(p: number) {
-  if (p >= 0.75) return "bg-red-600/10 text-red-700";
-  if (p >= 0.5) return "bg-orange-500/10 text-orange-600";
-  if (p >= 0.25) return "bg-yellow-500/10 text-yellow-700";
-  return "bg-green-500/10 text-green-700";
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://127.0.0.1:8000';
 
 export default function Home() {
+  // query & filters
+  const [query, setQuery] = useState('');
+  const [minProb, setMinProb] = useState<number | null>(null);
+  const [maxProb, setMaxProb] = useState<number | null>(null);
 
-  const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
-  const [sortBy, setSortBy] = useState<"fake_prob" | "published" | "title">(
-    "fake_prob"
-  );
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const [minProb, setMinProb] = useState<string>("");
-  const [maxProb, setMaxProb] = useState<string>("");
+  // sorting / pagination
+  const [sortBy, setSortBy] = useState<'fake_prob' | 'published' | 'title'>('fake_prob');
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
-
+  // data
   const [items, setItems] = useState<Article[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q.trim()), 400);
-    return () => clearTimeout(t);
-  }, [q]);
+  const buildUrl = () => {
+    const u = new URL(`${API_BASE}/articles`);
+    u.searchParams.set('page', String(page));
+    u.searchParams.set('page_size', String(pageSize));
+    u.searchParams.set('sort_by', sortBy);
+    u.searchParams.set('order', order);
+    if (query.trim()) u.searchParams.set('q', query.trim());
+    if (minProb !== null) u.searchParams.set('min_prob', String(minProb));
+    if (maxProb !== null) u.searchParams.set('max_prob', String(maxProb));
+    return u.toString();
+  };
 
-  
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("page_size", String(pageSize));
-    params.set("sort_by", sortBy);
-    params.set("order", order);
-    if (debouncedQ) params.set("q", debouncedQ);
-    const min = Number(minProb);
-    const max = Number(maxProb);
-    if (!Number.isNaN(min) && minProb !== "") params.set("min_prob", String(min));
-    if (!Number.isNaN(max) && maxProb !== "") params.set("max_prob", String(max));
-    return params.toString();
-  }, [page, pageSize, sortBy, order, debouncedQ, minProb, maxProb]);
-
-  
-  useEffect(() => {
-    let cancelled = false;
-    const ctrl = new AbortController();
-
-    async function load() {
-      setLoading(true);
-      setErr(null);
-      try {
-        const res = await fetch(`${API_BASE}/articles?${queryString}`, {
-          signal: ctrl.signal,
-        });
-        if (!res.ok) {
-          const detail = await res.text();
-          throw new Error(`API ${res.status}: ${detail}`);
-        }
-        const data: ApiResponse = await res.json();
-        if (!cancelled) {
-          setItems(data.items);
-          setTotal(data.total);
-        }
-      } catch (e: any) {
-        if (!cancelled) setErr(e.message ?? "Failed to load");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const fetchArticles = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch(buildUrl());
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const data: ArticlesResponse = await res.json();
+      setItems(data.items || []);
+      setTotal(data.total || 0);
+    } catch (e: any) {
+      setErr(e?.message || 'Failed to load');
+      setItems([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
     }
-    load();
+  };
 
-    return () => {
-      cancelled = true;
-      ctrl.abort();
-    };
-  }, [queryString]);
+  // Fetch on sort/pagination change
+  useEffect(() => {
+    fetchArticles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, sortBy, order]);
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const showingFrom = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const showingTo = Math.min(total, page * pageSize);
+  // Live update on query/min/max (debounced)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1);
+      fetchArticles();
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, minProb, maxProb]);
 
-  function resetFilters() {
-    setQ("");
-    setDebouncedQ("");
-    setMinProb("");
-    setMaxProb("");
-    setSortBy("fake_prob");
-    setOrder("desc");
+  const handleReset = () => {
+    setQuery('');
+    setMinProb(null);
+    setMaxProb(null);
+    setSortBy('fake_prob');
+    setOrder('desc');
+    setPageSize(20);
     setPage(1);
-    setPageSize(10);
-  }
+    fetchArticles();
+  };
 
   return (
-    <div className="min-h-dvh bg-white text-gray-900">
-      <header className="border-b">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="size-8 rounded-xl bg-[--brand]"></div>
-            <h1 className="text-xl font-semibold">News Credibility Feed</h1>
-          </div>
-          <nav className="flex items-center gap-2">
+    <main className="relative min-h-screen text-white overflow-x-hidden">
+      {/* dark gradient base */}
+      <div className="absolute inset-0 -z-20 bg-gradient-to-b from-[#0b0f19] via-[#0a0a12] to-[#0b0f19]" />
+
+      {/* smoother ripples */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        {/* base glow */}
+        <div
+          className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[140vmax] h-[140vmax] rounded-full blur-3xl opacity-45 will-change-transform"
+          style={{
+            background:
+              'radial-gradient(closest-side, rgba(90,130,255,0.22), rgba(90,130,255,0.10) 42%, rgba(90,130,255,0.0) 70%)',
+            transform: 'translate3d(-50%,-50%,0) scale(1)',
+          }}
+        />
+        {/* ripple 1 — your colors, but fade to 0 alpha (no “transparent”) + gentler scale */}
+        <div
+          className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[155vmax] h-[155vmax] rounded-full blur-2xl opacity-55 animate-ripple will-change-transform"
+          style={{
+            background:
+              'radial-gradient(closest-side, rgba(20,69,185,0.35) 0%, rgba(56,0,151,0.14) 46%, rgba(134,0,0,0.0) 72%)',
+            transform: 'translate3d(-50%,-50%,0)',
+          }}
+        />
+        {/* ripple 2 — your colors, slower, offset, fade out smoothly */}
+        <div
+          className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 w-[170vmax] h-[170vmax] rounded-full blur-2xl opacity-45 animate-ripple-slow will-change-transform"
+          style={{
+            background:
+              'radial-gradient(closest-side, rgba(0,73,175,0.28) 0%, rgba(56,0,151,0.14) 50%, rgba(134,0,0,0.0) 75%)',
+            transform: 'translate3d(-50%,-50%,0)',
+          }}
+        />
+      </div>
+
+      {/* top nav */}
+      <div className="sticky top-0 z-20 bg-black/30 backdrop-blur border-b border-white/10">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+          <div className="font-semibold tracking-tight">News Credibility</div>
+          <div className="flex items-center gap-2">
             <Link
               href="/check"
-              className="px-3 py-2 rounded-[--radius-xl] bg-[--brand] text-[--brand-foreground] hover:opacity-90 transition"
+              className="rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-transform hover:scale-105 active:scale-95"
             >
-              Check a URL
+              Paste URL
             </Link>
-          </nav>
+          </div>
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-          <div className="md:col-span-4">
-            <label className="block text-sm font-medium mb-1">Search</label>
+      <div className="mx-auto max-w-6xl px-4 py-8 md:py-12 grid gap-8">
+        {/* HERO / CONTROLS BOX */}
+        <section className="relative rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur p-6 md:p-8 shadow-lg">
+          {/* centered header in the box */}
+          <div className="mx-auto max-w-3xl">
+            <div className="flex flex-col items-center text-center">
+              <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+                Explore coverage with quick heuristics
+              </h1>
+              <p className="mt-2 text-sm md:text-base text-[--muted-foreground]">
+                This tool highlights writing cues and basic credibility hints from the articles that you scrape.
+                It’s not a truth detector — treat the score as a signal, not a surefire truth.
+              </p>
+            </div>
+          </div>
+
+          {/* search row (live as you type) */}
+          <div className="mx-auto mt-6 w-full max-w-2xl flex items-center justify-center gap-2">
             <input
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search title/body…"
-              className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-[--brand]"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search headlines or text…"
+              className="flex-1 min-w-0 rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/55 focus:outline-none focus:ring-2 focus:ring-[--brand]"
             />
           </div>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Sort by</label>
-            <select
-              value={sortBy}
-              onChange={(e) => {
-                setSortBy(e.target.value as any);
-                setPage(1);
-              }}
-              className="w-full rounded-lg border px-3 py-2"
-            >
-              <option value="fake_prob">Score</option>
-              <option value="published">Published</option>
-              <option value="title">Title</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Order</label>
-            <select
-              value={order}
-              onChange={(e) => {
-                setOrder(e.target.value as any);
-                setPage(1);
-              }}
-              className="w-full rounded-lg border px-3 py-2"
-            >
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Min score</label>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              max={1}
-              value={minProb}
-              onChange={(e) => {
-                setMinProb(e.target.value);
-                setPage(1);
-              }}
-              placeholder="e.g. 0.25"
-              className="w-full rounded-lg border px-3 py-2"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Max score</label>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              max={1}
-              value={maxProb}
-              onChange={(e) => {
-                setMaxProb(e.target.value);
-                setPage(1);
-              }}
-              placeholder="e.g. 0.75"
-              className="w-full rounded-lg border px-3 py-2"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Page size</label>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              className="w-full rounded-lg border px-3 py-2"
-            >
-              {[5, 10, 20, 50].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
+          {/* reset + filters row (one line on md+, wraps on small) */}
+          <div className="mx-auto mt-4 w-full max-w-2xl flex items-center justify-center gap-3 flex-wrap md:flex-nowrap">
             <button
-              onClick={resetFilters}
-              className="w-full mt-6 md:mt-0 px-3 py-2 rounded-[--radius-xl] border hover:bg-gray-50"
+              onClick={handleReset}
+              className="rounded-lg px-3 py-2 border border-white/10 text-white/90 hover:bg-white/5 transition-transform hover:scale-105 active:scale-95 shrink-0"
             >
               Reset
             </button>
-          </div>
-        </div>
 
-        
-        <div className="mt-4 text-sm text-gray-600 flex items-center justify-between">
-          <div>
-            {loading ? "Loading…" : `Showing ${showingFrom}–${showingTo} of ${total}`}
-          </div>
-          {err && <div className="text-red-600">{err}</div>}
-        </div>
-
-        
-        <div className="mt-4 grid grid-cols-1 gap-4">
-          {items.map((a) => (
-            <article
-              key={a.url}
-              className="rounded-2xl border p-4 hover:shadow-sm transition"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <h2 className="text-lg font-semibold leading-snug">
-                  <a
-                    href={a.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline"
-                  >
-                    {a.title || new URL(a.url).hostname}
-                  </a>
-                </h2>
-
-                <span
-                  title={`score = ${(a.fake_prob * 100).toFixed(0)}%`}
-                  className={classNames(
-                    "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
-                    scoreColor(a.fake_prob)
-                  )}
-                >
-                  {(a.fake_prob * 100).toFixed(0)}%
-                </span>
-              </div>
-
-              <div className="mt-1 text-xs text-gray-500">
-                <span className="uppercase tracking-wide">{a.source || "—"}</span>
-                <span className="mx-2">•</span>
-                <span>{formatDate(a.published)}</span>
-                <span className="mx-2">•</span>
-                <span>{a.word_count} words</span>
-              </div>
-
-              <p className="mt-3 text-sm line-clamp-3">{a.body}</p>
-
-              {a.flags?.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {a.flags.map((f, i) => (
-                    <span
-                      key={i}
-                      className="text-xs rounded-full bg-gray-100 px-2 py-1"
-                    >
-                      {f}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </article>
-          ))}
-
-          {!loading && items.length === 0 && (
-            <div className="rounded-xl border p-8 text-center text-sm text-gray-500">
-              No results. Try clearing filters or changing the search.
+            <div className="flex items-center gap-2 shrink-0">
+              <label className="text-white/70 text-sm">Min score</label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                max={1}
+                value={minProb ?? ''}
+                placeholder="e.g., 0.20"
+                onChange={(e) => setMinProb(e.target.value === '' ? null : Number(e.target.value))}
+                className="w-36 md:w-40 rounded-md bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-white/50 focus:outline-none"
+              />
             </div>
-          )}
-        </div>
 
-        
-        <div className="mt-6 flex items-center justify-center gap-2">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1 || loading}
-            className="px-3 py-2 rounded-lg border disabled:opacity-50"
-          >
-            ← Prev
-          </button>
-          <div className="text-sm tabular-nums">
-            Page {page} / {totalPages}
+            <div className="flex items-center gap-2 shrink-0">
+              <label className="text-white/70 text-sm">Max score</label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                max={1}
+                value={maxProb ?? ''}
+                placeholder="e.g., 0.80"
+                onChange={(e) => setMaxProb(e.target.value === '' ? null : Number(e.target.value))}
+                className="w-36 md:w-40 rounded-md bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-white/50 focus:outline-none"
+              />
+            </div>
           </div>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages || loading}
-            className="px-3 py-2 rounded-lg border disabled:opacity-50"
+
+        </section>
+
+        {/* RESULTS */}
+        <section className="grid gap-4">
+          {/* status row */}
+          <div className="flex items-center justify-between text-sm text-white/80">
+            <div>{loading ? 'Loading…' : err ? `Error: ${err}` : `Showing ${items.length} of ${total}`}</div>
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="rounded-lg px-2 py-1 border border-white/10 hover:bg-white/5 disabled:opacity-40 transition"
+              >
+                Prev
+              </button>
+              <span className="tabular-nums">
+                {page} / {totalPages}
+              </span>
+              <button
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="rounded-lg px-2 py-1 border border-white/10 hover:bg-white/5 disabled:opacity-40 transition"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          {/* cards */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {items.map((a) => (
+              <a
+                key={a.url}
+                href={a.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+              >
+                <div className="p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs text-white/70">
+                      {a.published ? new Date(a.published).toLocaleString() : '—'}
+                    </div>
+                    <div
+                      title={`score: ${a.fake_prob.toFixed(3)}`}
+                      className={`px-2 py-1 rounded-md text-xs font-semibold ${
+                        a.fake_prob >= 0.6
+                          ? 'bg-red-500/20 text-red-300'
+                          : a.fake_prob >= 0.35
+                          ? 'bg-yellow-500/20 text-yellow-200'
+                          : 'bg-emerald-500/20 text-emerald-200'
+                      }`}
+                    >
+                      {a.fake_prob.toFixed(2)}
+                    </div>
+                  </div>
+
+                  <h3 className="mt-2 text-lg font-semibold line-clamp-2">{a.title || '(no title)'}</h3>
+                  <p className="mt-2 text-white/80 text-sm line-clamp-3">{a.body}</p>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {a.flags?.slice(0, 3).map((f, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] uppercase tracking-wide rounded bg-white/5 px-2 py-1 text-white/70"
+                      >
+                        {f}
+                      </span>
+                    ))}
+                    <span className="ml-auto text-xs text-white/60">{a.source || '—'}</span>
+                  </div>
+                </div>
+              </a>
+            ))}
+
+            {!loading && !err && items.length === 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6 text-center text-white/75">
+                No results. Try clearing filters or searching a different term.
+              </div>
+            )}
+          </div>
+
+          {/* mobile pager */}
+          <div className="md:hidden flex items-center justify-center gap-3">
+            <button
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-lg px-3 py-2 border border-white/10 hover:bg-white/5 disabled:opacity-40 transition"
+            >
+              Prev
+            </button>
+            <span className="tabular-nums text-white/80">
+              {page} / {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="rounded-lg px-3 py-2 border border-white/10 hover:bg-white/5 disabled:opacity-40 transition"
+            >
+              Next
+            </button>
+          </div>
+        </section>
+      </div>
+
+      {/* sticky sort/order/page-size controls (bottom-right) */}
+      <aside className="fixed bottom-4 right-4 z-30">
+        <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur p-3 shadow-xl flex flex-col gap-2 w-[230px]">
+          <div className="text-xs font-semibold text-white/80">Display</div>
+
+          <label className="text-xs text-white/70">Sort by</label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="rounded-md bg-white/5 border border-white/10 px-2 py-2 text-sm focus:outline-none"
           >
-            Next →
-          </button>
+            <option value="fake_prob">Score</option>
+            <option value="published">Date</option>
+            <option value="title">Title</option>
+          </select>
+
+          <label className="text-xs text-white/70">Order</label>
+          <select
+            value={order}
+            onChange={(e) => setOrder(e.target.value as any)}
+            className="rounded-md bg-white/5 border border-white/10 px-2 py-2 text-sm focus:outline-none"
+          >
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
+
+          <label className="text-xs text-white/70">Page size</label>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              setPageSize(n);
+              setPage(1);
+            }}
+            className="rounded-md bg-white/5 border border-white/10 px-2 py-2 text-sm focus:outline-none"
+          >
+            {[10, 20, 30, 50].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
         </div>
-      </main>
-    </div>
+      </aside>
+
+      {/* smoother keyframes (no end “snap”) */}
+      <style jsx global>{`
+        :root {
+          --brand: rgb(66, 96, 136);
+          --brand-foreground: #0b1220;
+          --muted-foreground: rgba(51, 0, 162, 0.78);
+        }
+        @keyframes ripple {
+          0% {
+            transform: translate(-50%, -50%) scale(1.18);
+            opacity: 0.55;
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.75);
+            opacity: 0.72;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1.18);
+            opacity: 0.55;
+          }
+        }
+        @keyframes ripple-slow {
+          0% {
+            transform: translate(-50%, -50%) scale(1.5);
+            opacity: 0.5;
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 0.68;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1.5);
+            opacity: 0.5;
+          }
+        }
+        .animate-ripple {
+          animation: ripple 5s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+        }
+        .animate-ripple-slow {
+          animation: ripple-slow 10s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+        }
+      `}</style>
+    </main>
   );
 }
