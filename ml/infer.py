@@ -11,12 +11,15 @@ from sentence_transformers import SentenceTransformer
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL_PATH = ROOT / "models" / "bias_sentence_clf.joblib"
 
+# --- Embeddings model (switched to DistilRoBERTa) ---
+EMBEDDER_NAME = "sentence-transformers/all-distilroberta-v1"
+EMBEDDER: Optional[SentenceTransformer] = None  # shared, lazy-initialized
+
 @dataclass
 class _State:
     ok: bool = False
     clf: Optional[object] = None
-    embedder: Optional[SentenceTransformer] = None
-    model_name: str = "all-MiniLM-L6-v2"
+    model_name: str = EMBEDDER_NAME
 
 STATE = _State()
 
@@ -54,28 +57,37 @@ def heuristic_bias_prob(sent: str) -> float:
 # -------- model loading / inference --------
 def load_model(path: str | os.PathLike | None = None) -> bool:
     """Load classifier + embedder. Returns True if ready."""
+    global EMBEDDER, STATE
+
     model_path = Path(os.getenv("MODEL_PATH") or (path if path else DEFAULT_MODEL_PATH))
     try:
         obj = joblib.load(model_path)
         clf = obj["clf"]
-        embedder_name = obj.get("embedder", obj.get("model_name", "all-MiniLM-L6-v2"))
-        embedder = SentenceTransformer(embedder_name)
+        embedder_name = obj.get("embedder", obj.get("model_name", EMBEDDER_NAME))
+
+        # initialize (or re-init) shared EMBEDDER
+        if EMBEDDER is None or embedder_name != STATE.model_name:
+            EMBEDDER = SentenceTransformer(embedder_name)
 
         STATE.clf = clf
-        STATE.embedder = embedder
         STATE.model_name = embedder_name
         STATE.ok = True
         return True
     except Exception:
         STATE.ok = False
         STATE.clf = None
-        STATE.embedder = None
+        EMBEDDER = None
         return False
 
 def _predict_probs(texts: List[str]) -> List[float]:
-    if not STATE.ok or not texts:
+    if not STATE.ok or not texts or EMBEDDER is None or STATE.clf is None:
         return [0.0] * len(texts)
-    X = STATE.embedder.encode(texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
+    X = EMBEDDER.encode(
+        texts,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+    )
     probs = STATE.clf.predict_proba(X)[:, 1]
     return probs.tolist()
 
@@ -84,7 +96,7 @@ def annotate_sentences(text: str) -> List[Dict[str, float | str]]:
     sents = split_sentences(text)
     if not sents:
         return []
-    if STATE.ok:
+    if STATE.ok and EMBEDDER is not None:
         ml = _predict_probs(sents)
         return [{"text": s, "bias_prob": float(p)} for s, p in zip(sents, ml)]
     return []

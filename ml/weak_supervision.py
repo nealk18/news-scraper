@@ -17,7 +17,9 @@ MODELS_DIR = ROOT / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_OUT = MODELS_DIR / "bias_sentence_clf.joblib"
 
-EMBEDDER_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+# --- Embeddings model (switched to DistilRoBERTa) ---
+EMBEDDER_NAME = "sentence-transformers/all-distilroberta-v1"
+EMBEDDER = SentenceTransformer(EMBEDDER_NAME)
 
 # -------- stricter labelers for weak supervision --------
 BIAS_LEXICON = [
@@ -105,24 +107,36 @@ def main():
     X, y = build_dataset(articles)
 
     if len(X) < 200:
-        raise SystemExit("Not enough sentences to train. Scrape more articles")
+        raise SystemExit(f"Not enough sentences to train ({len(X)}). Scrape more articles.")
 
     Xb, yb = balance(X, y)
 
-    print(f"Training on {len(Xb)} sentences (balanced).")
-    embedder = SentenceTransformer(EMBEDDER_NAME)
-    X_emb = embedder.encode(Xb, batch_size=64, show_progress_bar=True, convert_to_numpy=True, normalize_embeddings=True)
+    print(f"Embedding with {EMBEDDER_NAME} …")
+    X_emb = EMBEDDER.encode(
+        Xb,
+        batch_size=64,
+        show_progress_bar=True,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    )
 
-    X_tr, X_val, y_tr, y_val = train_test_split(X_emb, yb, test_size=0.2, random_state=42, stratify=yb)
+    X_tr, X_val, y_tr, y_val = train_test_split(
+        X_emb, yb, test_size=0.2, random_state=42, stratify=yb
+    )
 
-    clf = LogisticRegression(max_iter=1000, class_weight="balanced")
+    clf = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)
     clf.fit(X_tr, y_tr)
 
     y_hat = clf.predict(X_val)
     acc = accuracy_score(y_val, y_hat)
     print(f"Validation accuracy: {acc:.3f}")
 
-    job = {"clf": clf, "model_name": EMBEDDER_NAME}
+    job = {
+        "clf": clf,
+        # store embedder name explicitly; keep model_name for back-compat
+        "embedder": EMBEDDER_NAME,
+        "model_name": EMBEDDER_NAME,
+    }
     joblib.dump(job, MODEL_OUT)
     print(f"Saved model -> {MODEL_OUT}")
 
