@@ -7,11 +7,15 @@ type Article = {
   url: string;
   source: string;
   title: string;
-  published: string;
+  published?: string;
   body: string;
   fake_prob: number;
   flags: string[];
   word_count: number;
+  // optional ML fields from batch_infer:
+  heur_prob?: number;
+  ml_prob?: number | null;
+  final_prob?: number | null;
 };
 
 type ArticlesResponse = {
@@ -116,7 +120,7 @@ export default function Home() {
             transform: 'translate3d(-50%,-50%,0) scale(1)',
           }}
         />
-        {/* ripple 1 — your colors, but fade to 0 alpha (no “transparent”) + gentler scale */}
+        {/* ripple 1 */}
         <div
           className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[155vmax] h-[155vmax] rounded-full blur-2xl opacity-55 animate-ripple will-change-transform"
           style={{
@@ -125,7 +129,7 @@ export default function Home() {
             transform: 'translate3d(-50%,-50%,0)',
           }}
         />
-        {/* ripple 2 — your colors, slower, offset, fade out smoothly */}
+        {/* ripple 2 */}
         <div
           className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 w-[170vmax] h-[170vmax] rounded-full blur-2xl opacity-45 animate-ripple-slow will-change-transform"
           style={{
@@ -154,20 +158,19 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4 py-8 md:py-12 grid gap-8">
         {/* HERO / CONTROLS BOX */}
         <section className="relative rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur p-6 md:p-8 shadow-lg">
-          {/* centered header in the box */}
           <div className="mx-auto max-w-3xl">
             <div className="flex flex-col items-center text-center">
               <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-                Explore coverage with quick heuristics
+                Explore coverage with quick heuristics + ML
               </h1>
               <p className="mt-2 text-sm md:text-base text-[--muted-foreground]">
-                This tool highlights writing cues and basic credibility hints from the articles that you scrape.
-                It’s not a truth detector — treat the score as a signal, not a surefire truth.
+                This tool highlights writing cues and basic credibility hints from the articles you scrape.
+                It’s not a truth detector — treat the score as a signal.
               </p>
             </div>
           </div>
 
-          {/* search row (live as you type) */}
+          {/* search row */}
           <div className="mx-auto mt-6 w-full max-w-2xl flex items-center justify-center gap-2">
             <input
               value={query}
@@ -177,7 +180,7 @@ export default function Home() {
             />
           </div>
 
-          {/* reset + filters row (one line on md+, wraps on small) */}
+          {/* reset + filters */}
           <div className="mx-auto mt-4 w-full max-w-2xl flex items-center justify-center gap-3 flex-wrap md:flex-nowrap">
             <button
               onClick={handleReset}
@@ -214,7 +217,6 @@ export default function Home() {
               />
             </div>
           </div>
-
         </section>
 
         {/* RESULTS */}
@@ -245,50 +247,58 @@ export default function Home() {
 
           {/* cards */}
           <div className="grid gap-4 md:grid-cols-2">
-            {items.map((a) => (
-              <a
-                key={a.url}
-                href={a.url}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
-              >
-                <div className="p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs text-white/70">
-                      {a.published ? new Date(a.published).toLocaleString() : '—'}
+            {items.map((a) => {
+              const score = a.final_prob ?? a.fake_prob; // prefer ML-blended
+              const tone =
+                score >= 0.6
+                  ? 'bg-red-500/20 text-red-300'
+                  : score >= 0.35
+                  ? 'bg-yellow-500/20 text-yellow-200'
+                  : 'bg-emerald-500/20 text-emerald-200';
+              return (
+                <a
+                  key={a.url}
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+                >
+                  <div className="p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs text-white/70">
+                        {a.published ? new Date(a.published).toLocaleString() : '—'}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {a.final_prob != null && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10">ML</span>
+                        )}
+                        <div
+                          title={`score: ${score.toFixed(3)}`}
+                          className={`px-2 py-1 rounded-md text-xs font-semibold ${tone}`}
+                        >
+                          {score.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
-                    <div
-                      title={`score: ${a.fake_prob.toFixed(3)}`}
-                      className={`px-2 py-1 rounded-md text-xs font-semibold ${
-                        a.fake_prob >= 0.6
-                          ? 'bg-red-500/20 text-red-300'
-                          : a.fake_prob >= 0.35
-                          ? 'bg-yellow-500/20 text-yellow-200'
-                          : 'bg-emerald-500/20 text-emerald-200'
-                      }`}
-                    >
-                      {a.fake_prob.toFixed(2)}
+
+                    <h3 className="mt-2 text-lg font-semibold line-clamp-2">{a.title || '(no title)'}</h3>
+                    <p className="mt-2 text-white/80 text-sm line-clamp-3">{a.body}</p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {a.flags?.slice(0, 3).map((f, i) => (
+                        <span
+                          key={i}
+                          className="text-[10px] uppercase tracking-wide rounded bg-white/5 px-2 py-1 text-white/70"
+                        >
+                          {f}
+                        </span>
+                      ))}
+                      <span className="ml-auto text-xs text-white/60">{a.source || '—'}</span>
                     </div>
                   </div>
-
-                  <h3 className="mt-2 text-lg font-semibold line-clamp-2">{a.title || '(no title)'}</h3>
-                  <p className="mt-2 text-white/80 text-sm line-clamp-3">{a.body}</p>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {a.flags?.slice(0, 3).map((f, i) => (
-                      <span
-                        key={i}
-                        className="text-[10px] uppercase tracking-wide rounded bg-white/5 px-2 py-1 text-white/70"
-                      >
-                        {f}
-                      </span>
-                    ))}
-                    <span className="ml-auto text-xs text-white/60">{a.source || '—'}</span>
-                  </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              );
+            })}
 
             {!loading && !err && items.length === 0 && (
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6 text-center text-white/75">
@@ -365,7 +375,7 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* smoother keyframes (no end “snap”) */}
+      {/* smoother keyframes */}
       <style jsx global>{`
         :root {
           --brand: rgb(66, 96, 136);

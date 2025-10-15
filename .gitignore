@@ -72,3 +72,13 @@ dist/
 # ----- Misc -----
 .python-version
 .envrc
+
+
+# ----- ML -----
+models/
+data/
+
+
+
+
+

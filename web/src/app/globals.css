@@ -1,51 +1,64 @@
 @import "tailwindcss";
 
+/* Design tokens */
 :root {
   --brand: oklch(0.66 0.20 280);
   --brand-foreground: #ffffff;
+  --muted-foreground: rgba(255, 255, 255, 0.65);
   --radius-xl: 14px;
 }
 
+/* Full-height baseline */
 html, body {
   height: 100%;
 }
 
+/* Base background (dark gradient) */
 body {
   color: #fff;
-  background: radial-gradient(1200px 800px at 10% 10%, rgba(58, 37, 103, 0.25), transparent 60%), radial-gradient(900px 700px at 90% 20%, rgba(18, 92, 134, 0.18), transparent 60%), linear-gradient(135deg, #0A0A0F 0%, #0B0B12 60%, #09090d 100%);
+  background:
+    radial-gradient(1200px 800px at 10% 10%, rgba(58, 37, 103, 0.25), transparent 60%),
+    radial-gradient(900px 700px at 90% 20%, rgba(18, 92, 134, 0.18), transparent 60%),
+    linear-gradient(135deg, #0A0A0F 0%, #0B0B12 60%, #09090D 100%);
   min-height: 100dvh;
 }
 
+/* Animated “ripple” backdrop layer */
 .ripple {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background: radial-gradient(400px 400px at 20% 30%, rgba(124, 58, 237, 0.08), transparent 60%), radial-gradient(450px 450px at 80% 70%, rgba(59, 130, 246, 0.06), transparent 60%);
+  background:
+    radial-gradient(400px 400px at 20% 30%, rgba(124, 58, 237, 0.08), transparent 60%),
+    radial-gradient(450px 450px at 80% 70%, rgba(59, 130, 246, 0.06), transparent 60%);
   animation: ripplePulse 7s ease-in-out infinite;
 }
 
-@keyframes ripplePlus {
-  0% { opacity: 0.35; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(1.02) }
+/* NOTE: Keyframe name must match `.ripple`'s `animation:` */
+@keyframes ripplePulse {
+  0%   { opacity: 0.35; transform: scale(1); }
+  50%  { opacity: 0.55; transform: scale(1.02); }
   100% { opacity: 0.35; transform: scale(1); }
 }
 
+/* Accessible focus outline */
 :focus-visible {
   outline: 2px solid color-mix(in oklab, var(--brand), white 10%);
   outline-offset: 2px;
 }
 
-.line-clamp-3 {
+/* Utilities */
+.line_clamp_base {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-
+.line-clamp-3 {
+  composes: line_clamp_base;
+  -webkit-line-clamp: 3;
+}
 .line-clamp-4 {
-  display: -webkit-box;
+  composes: line_clamp_base;
   -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
