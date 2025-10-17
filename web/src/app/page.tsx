@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 type Article = {
   url: string;
@@ -141,8 +142,17 @@ export default function Home() {
 
       {/* top nav */}
       <div className="sticky top-0 z-20 bg-black/30 backdrop-blur border-b border-white/10">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center">
-          <div className="font-semibold tracking-tight">Bias Detector</div>
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+          <div className="font-semibold tracking-tight">News Credibility</div>
+          <div className="flex items-center gap-2">
+            {/* Bring back the Paste Text entry point */}
+            <Link
+              href="/check"
+              className="rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-transform hover:scale-105 active:scale-95"
+            >
+              Paste Text
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -152,10 +162,10 @@ export default function Home() {
           <div className="mx-auto max-w-3xl">
             <div className="flex flex-col items-center text-center">
               <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-                Find bias within texts using Machine Learning
+                Find bias within text using Machine Learning
               </h1>
               <p className="mt-2 text-sm md:text-base text-[--muted-foreground]">
-                Scores text based on bias signals and cues.  Use this as a tool, not to determine surefire truth.
+                Scores text using stylistic cues and bias signals. Use this as a tool, not to find a surefire truth.
               </p>
             </div>
           </div>
