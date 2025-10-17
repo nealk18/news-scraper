@@ -143,7 +143,7 @@ export default function Home() {
       {/* top nav */}
       <div className="sticky top-0 z-20 bg-black/30 backdrop-blur border-b border-white/10">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-          <div className="font-semibold tracking-tight">News Credibility</div>
+          <div className="font-semibold tracking-tight">Bias Detector</div>
           <div className="flex items-center gap-2">
             <Link
               href="/check"
@@ -168,7 +168,7 @@ export default function Home() {
           <div className="mx-auto max-w-3xl">
             <div className="flex flex-col items-center text-center">
               <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-                Explore coverage with quick heuristics
+                Find bias in text using Machine Learning
               </h1>
               <p className="mt-2 text-sm md:text-base text-[--muted-foreground]">
                 This tool highlights writing cues and basic credibility hints from the articles that you scrape.

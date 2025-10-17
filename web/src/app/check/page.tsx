@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import BiasHeatmap from '../components/BiasHeatmap'; // adjust if your path differs
+import { useMemo, useState } from 'react';
+import BiasHeatmap from '../components/BiasHeatmap'; // keep this path if your components folder is at src/app/components
 
-// Sentence type returned by /score-url (ML + heuristic)
+// Sentence shape returned by /score-text (ML + heuristic)
 type Sentence = {
   text: string;
   final_prob?: number | null;
@@ -13,20 +13,19 @@ type Sentence = {
   heur_prob?: number | null;
 };
 
-// Article shape from /score-url
-type Article = {
-  url: string;
-  source: string;
-  title: string;
-  published?: string;
+// API response shape from /score-text
+type Scored = {
+  url?: string | null;
+  source?: string | null;
+  title?: string | null;
+  published?: string | null;
   body: string;
-  // existing heuristic score
-  fake_prob: number;
 
-  // ML-enriched fields (optional)
-  heur_prob?: number;
+  // overall scores
+  fake_prob: number;           // we treat this as the overall score coming back
+  final_prob?: number | null;  // if present, prefer this
   ml_prob?: number | null;
-  final_prob?: number | null;
+  heur_prob?: number | null;
 
   flags: string[];
   word_count: number;
@@ -46,29 +45,36 @@ function scoreTone(prob: number) {
 }
 
 export default function CheckPage() {
-  const [url, setUrl] = useState('');
-  const [result, setResult] = useState<Article | null>(null);
+  // inputs
+  const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
+  const [text, setText] = useState('');
+
+  // result state
+  const [result, setResult] = useState<Scored | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const textTooShort = useMemo(() => (text.trim().length < 120), [text]);
 
   async function handleAnalyze() {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const res = await fetch(`${API_BASE}/score-url`, {
+      const res = await fetch(`${API_BASE}/score-text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ text, title: title || undefined, author: author || undefined }),
       });
       if (!res.ok) {
         const txt = await res.text();
         throw new Error(txt || `HTTP ${res.status}`);
       }
-      const data = (await res.json()) as Article;
+      const data = (await res.json()) as Scored;
       setResult(data);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to analyze URL';
+      const msg = e instanceof Error ? e.message : 'Failed to analyze text';
       setError(msg);
     } finally {
       setLoading(false);
@@ -76,12 +82,14 @@ export default function CheckPage() {
   }
 
   function handleReset() {
-    setUrl('');
+    setTitle('');
+    setAuthor('');
+    setText('');
     setResult(null);
     setError(null);
   }
 
-  // prefer ML-blended final probability if present
+  // Prefer ML-blended final probability if present; fallback to fake_prob
   const displayProb = result?.final_prob ?? result?.fake_prob ?? 0;
 
   return (
@@ -123,41 +131,60 @@ export default function CheckPage() {
           </Link>
         </div>
 
-        <header className="mb-8">
+        <header className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-            Analyze a News URL
+            Analyze Text
           </h1>
           <p className="mt-2 text-white/70">
-            Paste a link to an article. We’ll extract the text and return heuristic + ML signals. The score is a signal, not truth.
+            Paste the article’s text (120+ characters). We’ll run ML signals and show a per-sentence heatmap.
           </p>
         </header>
 
-        {/* controls */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            type="url"
-            placeholder="https://example.com/news/..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className="flex-1 rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
-          />
-          <button
-            onClick={handleAnalyze}
-            disabled={!url || loading}
-            className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
-          >
-            {loading ? 'Analyzing…' : 'Analyze URL'}
-          </button>
-          <button
-            onClick={handleReset}
-            className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95"
-          >
-            Reset
-          </button>
+        {/* controls (centered column) */}
+        <div className="mx-auto max-w-3xl">
+          <div className="grid gap-3">
+            <input
+              type="text"
+              placeholder="(optional) Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
+            />
+            <input
+              type="text"
+              placeholder="(optional) Author"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              className="rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
+            />
+            <textarea
+              placeholder="Paste article text here…"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={10}
+              className="rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
+            />
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={handleAnalyze}
+                disabled={textTooShort || loading}
+                className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
+                title={textTooShort ? 'Enter at least ~120 characters' : 'Analyze'}
+              >
+                {loading ? 'Analyzing…' : 'Analyze Text'}
+              </button>
+              <button
+                onClick={handleReset}
+                className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* result / error */}
-        <div className="mt-6">
+        <div className="mt-8 mx-auto max-w-3xl">
           {error && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-200">
               {error}
@@ -165,37 +192,26 @@ export default function CheckPage() {
           )}
 
           {result && (
-            <a
-              href={result.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.01)_100%)] p-4 md:p-5 mt-2 transition-transform hover:scale-[1.01]"
-            >
+            <div className="rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.01)_100%)] p-4 md:p-5 mt-2">
               {/* header with score on the top-right */}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-lg font-semibold line-clamp-2">
                     {result.title || '(no title)'}
                   </h3>
-                  <div className="mt-1 text-sm text-white/70">{result.source || 'unknown'}</div>
+                  <div className="mt-1 text-sm text-white/70">
+                    {result.source || (author ? `by ${author}` : '—')}
+                  </div>
                 </div>
                 <span
                   className={`shrink-0 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${scoreTone(
                     displayProb
                   )}`}
-                  title="Bias score"
+                  title="Bias score (ML-weighted)"
                 >
                   <span className="opacity-80">score</span>
                   <strong className="tracking-tight">{displayProb.toFixed(3)}</strong>
                 </span>
-              </div>
-
-              <div className="mt-2 text-sm text-white/70">
-                {result.published ? new Date(result.published).toLocaleString() : '—'}
-              </div>
-
-              <div className="mt-3 text-sm line-clamp-3 text-white/80">
-                {result.body}
               </div>
 
               {/* tiny metrics row (final/ml/heur if present) */}
@@ -216,32 +232,19 @@ export default function CheckPage() {
                       heur: <b>{result.heur_prob.toFixed(3)}</b>
                     </span>
                   )}
+                  <span className="rounded border border-white/10 bg-white/5 px-2 py-1">
+                    words: <b>{result.word_count}</b>
+                  </span>
                 </div>
               )}
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
-                  <span className="opacity-70">words</span>
-                  <strong className="tracking-tight">{result.word_count}</strong>
-                </span>
-
-                <div className="flex flex-wrap gap-2">
-                  {result.flags?.slice(0, 3).map((f, i) => (
-                    <span
-                      key={i}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80"
-                    >
-                      {f}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* sentence heatmap (only shows if API returned sentences) */}
+              {/* sentence heatmap */}
               {result.sentences?.length ? (
                 <BiasHeatmap sentences={result.sentences} />
-              ) : null}
-            </a>
+              ) : (
+                <div className="mt-4 text-sm text-white/70">No sentence-level annotations returned.</div>
+              )}
+            </div>
           )}
         </div>
       </div>
