@@ -5,6 +5,7 @@ regex==2024.9.11
 pydantic==2.8.2
 
 sentence-transformers==2.7.0
-transformers==4.44.2
+transformers==4.46.1
+tokenizers==0.20.3
 torch==2.7.1
 joblib==1.4.2
