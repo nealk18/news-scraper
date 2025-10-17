@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 
 type Article = {
   url: string;
@@ -12,6 +11,9 @@ type Article = {
   fake_prob: number;
   flags: string[];
   word_count: number;
+  // optional ML-enriched fields (present if you've run batch_infer)
+  ml_prob?: number | null;
+  final_prob?: number | null;
 };
 
 type ArticlesResponse = {
@@ -20,9 +22,6 @@ type ArticlesResponse = {
   page: number;
   page_size: number;
 };
-
-type SortBy = 'fake_prob' | 'published' | 'title';
-type Order = 'asc' | 'desc';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://127.0.0.1:8000';
 
@@ -33,8 +32,8 @@ export default function Home() {
   const [maxProb, setMaxProb] = useState<number | null>(null);
 
   // sorting / pagination
-  const [sortBy, setSortBy] = useState<SortBy>('fake_prob');
-  const [order, setOrder] = useState<Order>('desc');
+  const [sortBy, setSortBy] = useState<'fake_prob' | 'published' | 'title'>('fake_prob');
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
 
@@ -58,7 +57,7 @@ export default function Home() {
     return u.toString();
   };
 
-  const fetchArticles = async (): Promise<void> => {
+  const fetchArticles = async () => {
     setLoading(true);
     setErr(null);
     try {
@@ -120,7 +119,7 @@ export default function Home() {
             transform: 'translate3d(-50%,-50%,0) scale(1)',
           }}
         />
-        {/* ripple 1 — your colors, but fade to 0 alpha (no “transparent”) + gentler scale */}
+        {/* ripple 1 */}
         <div
           className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[155vmax] h-[155vmax] rounded-full blur-2xl opacity-55 animate-ripple will-change-transform"
           style={{
@@ -129,7 +128,7 @@ export default function Home() {
             transform: 'translate3d(-50%,-50%,0)',
           }}
         />
-        {/* ripple 2 — your colors, slower, offset, fade out smoothly */}
+        {/* ripple 2 */}
         <div
           className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 w-[170vmax] h-[170vmax] rounded-full blur-2xl opacity-45 animate-ripple-slow will-change-transform"
           style={{
@@ -142,42 +141,26 @@ export default function Home() {
 
       {/* top nav */}
       <div className="sticky top-0 z-20 bg-black/30 backdrop-blur border-b border-white/10">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center">
           <div className="font-semibold tracking-tight">Bias Detector</div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/check"
-              className="rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-transform hover:scale-105 active:scale-95"
-            >
-              Paste URL
-            </Link>
-            <Link
-              href="/paste"
-              className="rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-transform hover:scale-105 active:scale-95"
-            >
-              Paste Text
-            </Link>
-          </div>
         </div>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 py-8 md:py-12 grid gap-8">
         {/* HERO / CONTROLS BOX */}
         <section className="relative rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur p-6 md:p-8 shadow-lg">
-          {/* centered header in the box */}
           <div className="mx-auto max-w-3xl">
             <div className="flex flex-col items-center text-center">
               <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
                 Find bias in text using Machine Learning
               </h1>
               <p className="mt-2 text-sm md:text-base text-[--muted-foreground]">
-                This tool highlights writing cues and basic credibility hints from the articles that you scrape.
-                It’s not a truth detector — treat the score as a signal, not a surefire truth.
+                Scores text based on bias signals and cues.  Use this as a tool, not to determine surefire truth.
               </p>
             </div>
           </div>
 
-          {/* search row (live as you type) */}
+          {/* search row */}
           <div className="mx-auto mt-6 w-full max-w-2xl flex items-center justify-center gap-2">
             <input
               value={query}
@@ -187,7 +170,7 @@ export default function Home() {
             />
           </div>
 
-          {/* reset + filters row (one line on md+, wraps on small) */}
+          {/* reset + filters */}
           <div className="mx-auto mt-4 w-full max-w-2xl flex items-center justify-center gap-3 flex-wrap md:flex-nowrap">
             <button
               onClick={handleReset}
@@ -258,50 +241,65 @@ export default function Home() {
 
           {/* cards */}
           <div className="grid gap-4 md:grid-cols-2">
-            {items.map((a) => (
-              <a
-                key={a.url}
-                href={a.url}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
-              >
-                <div className="p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs text-white/70">
-                      {a.published ? new Date(a.published).toLocaleString() : '—'}
+            {items.map((a) => {
+              const overall = a.final_prob ?? a.fake_prob; // prefer ML-blended if available
+              const scoreClass =
+                overall >= 0.6
+                  ? 'bg-red-500/20 text-red-300'
+                  : overall >= 0.35
+                  ? 'bg-yellow-500/20 text-yellow-200'
+                  : 'bg-emerald-500/20 text-emerald-200';
+
+              return (
+                <a
+                  key={a.url}
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+                >
+                  <div className="p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs text-white/70">
+                        {a.published ? new Date(a.published).toLocaleString() : '—'}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* ML badge if this card has ML scores */}
+                        {typeof a.ml_prob === 'number' && (
+                          <span
+                            title="Includes ML score"
+                            className="px-2 py-1 rounded-md text-[10px] font-semibold bg-indigo-500/20 text-indigo-200 border border-indigo-400/30"
+                          >
+                            ML
+                          </span>
+                        )}
+                        <div
+                          title={`score: ${overall.toFixed(3)}`}
+                          className={`px-2 py-1 rounded-md text-xs font-semibold ${scoreClass}`}
+                        >
+                          {overall.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
-                    <div
-                      title={`score: ${a.fake_prob.toFixed(3)}`}
-                      className={`px-2 py-1 rounded-md text-xs font-semibold ${
-                        a.fake_prob >= 0.6
-                          ? 'bg-red-500/20 text-red-300'
-                          : a.fake_prob >= 0.35
-                          ? 'bg-yellow-500/20 text-yellow-200'
-                          : 'bg-emerald-500/20 text-emerald-200'
-                      }`}
-                    >
-                      {a.fake_prob.toFixed(2)}
+
+                    <h3 className="mt-2 text-lg font-semibold line-clamp-2">{a.title || '(no title)'}</h3>
+                    <p className="mt-2 text-white/80 text-sm line-clamp-3">{a.body}</p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {a.flags?.slice(0, 3).map((f, i) => (
+                        <span
+                          key={i}
+                          className="text-[10px] uppercase tracking-wide rounded bg-white/5 px-2 py-1 text-white/70"
+                        >
+                          {f}
+                        </span>
+                      ))}
+                      <span className="ml-auto text-xs text-white/60">{a.source || '—'}</span>
                     </div>
                   </div>
-
-                  <h3 className="mt-2 text-lg font-semibold line-clamp-2">{a.title || '(no title)'}</h3>
-                  <p className="mt-2 text-white/80 text-sm line-clamp-3">{a.body}</p>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {a.flags?.slice(0, 3).map((f, i) => (
-                      <span
-                        key={i}
-                        className="text-[10px] uppercase tracking-wide rounded bg-white/5 px-2 py-1 text-white/70"
-                      >
-                        {f}
-                      </span>
-                    ))}
-                    <span className="ml-auto text-xs text-white/60">{a.source || '—'}</span>
-                  </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              );
+            })}
 
             {!loading && !err && items.length === 0 && (
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6 text-center text-white/75">
@@ -342,7 +340,7 @@ export default function Home() {
           <select
             value={sortBy}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-              setSortBy(e.target.value as SortBy)
+              setSortBy(e.target.value as 'fake_prob' | 'published' | 'title')
             }
             className="rounded-md bg-white/5 border border-white/10 px-2 py-2 text-sm focus:outline-none"
           >
@@ -355,7 +353,7 @@ export default function Home() {
           <select
             value={order}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-              setOrder(e.target.value as Order)
+              setOrder(e.target.value as 'asc' | 'desc')
             }
             className="rounded-md bg-white/5 border border-white/10 px-2 py-2 text-sm focus:outline-none"
           >
@@ -382,7 +380,7 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* smoother keyframes (no end “snap”) */}
+      {/* smoother keyframes */}
       <style jsx global>{`
         :root {
           --brand: rgb(66, 96, 136);
