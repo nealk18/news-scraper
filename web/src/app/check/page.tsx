@@ -2,25 +2,29 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import BiasHeatmap from '../components/BiasHeatmap';
+import BiasHeatmap from '../components/BiasHeatmap'; // adjust if your path differs
 
+// Sentence type returned by /score-url (ML + heuristic)
 type Sentence = {
   text: string;
   final_prob?: number | null;
-  bias_prob?: number | null;
+  bias_prob?: number | null;   // compatible with older API variants
   ml_prob?: number | null;
   heur_prob?: number | null;
 };
 
+// Article shape from /score-url
 type Article = {
   url: string;
-  source: string;       // we’ll put author here
-  title: string;        // user-provided title (optional)
-  published?: string | null;
+  source: string;
+  title: string;
+  published?: string;
   body: string;
-
+  // existing heuristic score
   fake_prob: number;
-  heur_prob?: number | null;
+
+  // ML-enriched fields (optional)
+  heur_prob?: number;
   ml_prob?: number | null;
   final_prob?: number | null;
 
@@ -32,16 +36,17 @@ type Article = {
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://127.0.0.1:8000';
 
 function scoreTone(prob: number) {
-  if (prob < 0.3) return 'bg-green-500/20 text-green-300 border-green-400/30';
-  if (prob < 0.6) return 'bg-amber-500/20 text-amber-300 border-amber-400/30';
+  if (prob < 0.3) {
+    return 'bg-green-500/20 text-green-300 border-green-400/30';
+  }
+  if (prob < 0.6) {
+    return 'bg-amber-500/20 text-amber-300 border-amber-400/30';
+  }
   return 'bg-rose-500/20 text-rose-300 border-rose-400/30';
 }
 
 export default function CheckPage() {
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [text, setText] = useState('');
-
+  const [url, setUrl] = useState('');
   const [result, setResult] = useState<Article | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,10 +56,10 @@ export default function CheckPage() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch(`${API_BASE}/score-text`, {
+      const res = await fetch(`${API_BASE}/score-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, title: title || undefined, author: author || undefined }),
+        body: JSON.stringify({ url }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -62,21 +67,21 @@ export default function CheckPage() {
       }
       const data = (await res.json()) as Article;
       setResult(data);
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to analyze text');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to analyze URL';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }
 
   function handleReset() {
-    setTitle('');
-    setAuthor('');
-    setText('');
+    setUrl('');
     setResult(null);
     setError(null);
   }
 
+  // prefer ML-blended final probability if present
   const displayProb = result?.final_prob ?? result?.fake_prob ?? 0;
 
   return (
@@ -106,6 +111,7 @@ export default function CheckPage() {
         }}
       />
 
+      {/* page content */}
       <div className="relative mx-auto max-w-5xl px-4 py-10">
         {/* top nav */}
         <div className="mb-6">
@@ -117,59 +123,41 @@ export default function CheckPage() {
           </Link>
         </div>
 
-        <header className="mb-8 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Analyze Article Text</h1>
+        <header className="mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+            Analyze a News URL
+          </h1>
           <p className="mt-2 text-white/70">
-            Paste article text (or a long excerpt). Add a title and author if you want them shown in the result.
+            Paste a link to an article. We’ll extract the text and return heuristic + ML signals. The score is a signal, not truth.
           </p>
         </header>
 
-        {/* centered form */}
-        <div className="mx-auto max-w-3xl">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              type="text"
-              placeholder="Title (optional)"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
-            />
-            <input
-              type="text"
-              placeholder="Author (optional)"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              className="rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
-            />
-          </div>
-
-          <textarea
-            placeholder="Paste article text here…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={12}
-            className="mt-3 w-full rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
+        {/* controls */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <input
+            type="url"
+            placeholder="https://example.com/news/..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="flex-1 rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/50 focus:outline-none"
           />
-
-          <div className="mt-4 flex items-center justify-center gap-3">
-            <button
-              onClick={handleAnalyze}
-              disabled={!text || loading}
-              className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
-            >
-              {loading ? 'Analyzing…' : 'Analyze Text'}
-            </button>
-            <button
-              onClick={handleReset}
-              className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95"
-            >
-              Reset
-            </button>
-          </div>
+          <button
+            onClick={handleAnalyze}
+            disabled={!url || loading}
+            className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
+          >
+            {loading ? 'Analyzing…' : 'Analyze URL'}
+          </button>
+          <button
+            onClick={handleReset}
+            className="rounded-lg px-4 py-3 border border-white/10 bg-white/5 text-white/90 transition-transform hover:scale-105 active:scale-95"
+          >
+            Reset
+          </button>
         </div>
 
         {/* result / error */}
-        <div className="mt-8">
+        <div className="mt-6">
           {error && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-200">
               {error}
@@ -177,25 +165,28 @@ export default function CheckPage() {
           )}
 
           {result && (
-            <div className="block rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.01)_100%)] p-4 md:p-5 mt-2">
+            <a
+              href={result.url}
+              target="_blank"
+              rel="noreferrer"
+              className="block rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.01)_100%)] p-4 md:p-5 mt-2 transition-transform hover:scale-[1.01]"
+            >
               {/* header with score on the top-right */}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-lg font-semibold line-clamp-2">
                     {result.title || '(no title)'}
                   </h3>
-                  <div className="mt-1 text-sm text-white/70">{result.source || 'unknown author'}</div>
+                  <div className="mt-1 text-sm text-white/70">{result.source || 'unknown'}</div>
                 </div>
                 <span
                   className={`shrink-0 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${scoreTone(
-                    result.final_prob ?? result.fake_prob ?? 0
+                    displayProb
                   )}`}
                   title="Bias score"
                 >
                   <span className="opacity-80">score</span>
-                  <strong className="tracking-tight">
-                    {(result.final_prob ?? result.fake_prob ?? 0).toFixed(3)}
-                  </strong>
+                  <strong className="tracking-tight">{displayProb.toFixed(3)}</strong>
                 </span>
               </div>
 
@@ -203,12 +194,11 @@ export default function CheckPage() {
                 {result.published ? new Date(result.published).toLocaleString() : '—'}
               </div>
 
-              <div className="mt-3 text-sm text-white/80 whitespace-pre-wrap">{result.body}</div>
+              <div className="mt-3 text-sm line-clamp-3 text-white/80">
+                {result.body}
+              </div>
 
-              {/* sentence heatmap */}
-              {result.sentences?.length ? <BiasHeatmap sentences={result.sentences} /> : null}
-
-              {/* tiny metrics row */}
+              {/* tiny metrics row (final/ml/heur if present) */}
               {(result.final_prob ?? result.ml_prob ?? result.heur_prob) !== undefined && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/80">
                   {result.final_prob != null && (
@@ -226,12 +216,32 @@ export default function CheckPage() {
                       heur: <b>{result.heur_prob.toFixed(3)}</b>
                     </span>
                   )}
-                  <span className="rounded border border-white/10 bg-white/5 px-2 py-1">
-                    words: <b>{result.word_count}</b>
-                  </span>
                 </div>
               )}
-            </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm">
+                  <span className="opacity-70">words</span>
+                  <strong className="tracking-tight">{result.word_count}</strong>
+                </span>
+
+                <div className="flex flex-wrap gap-2">
+                  {result.flags?.slice(0, 3).map((f, i) => (
+                    <span
+                      key={i}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80"
+                    >
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* sentence heatmap (only shows if API returned sentences) */}
+              {result.sentences?.length ? (
+                <BiasHeatmap sentences={result.sentences} />
+              ) : null}
+            </a>
           )}
         </div>
       </div>
@@ -244,17 +254,41 @@ export default function CheckPage() {
           --muted-foreground: rgba(51, 0, 162, 0.78);
         }
         @keyframes ripple {
-          0% { transform: translate(-50%, -50%) scale(1.12); opacity: 0.6; }
-          50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.75; }
-          100% { transform: translate(-50%, -50%) scale(1.12); opacity: 0.6; }
+          0% {
+            transform: translate(-50%, -50%) scale(1.12);
+            opacity: 0.6;
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.5);
+            opacity: 0.75;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1.12);
+            opacity: 0.6;
+          }
         }
         @keyframes ripple-slow {
-          0% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.65; }
-          50% { transform: translate(-50%, -50%) scale(2); opacity: 0.85; }
-          100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.65; }
+          0% {
+            transform: translate(-50%, -50%) scale(1.5);
+            opacity: 0.65;
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 0.85;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1.5);
+            opacity: 0.65;
+          }
         }
-        .animate-ripple { animation: ripple 5s ease-in-out infinite; will-change: transform, opacity; }
-        .animate-ripple-slow { animation: ripple-slow 10s ease-in-out infinite; will-change: transform, opacity; }
+        .animate-ripple {
+          animation: ripple 5s ease-in-out infinite;
+          will-change: transform, opacity;
+        }
+        .animate-ripple-slow {
+          animation: ripple-slow 10s ease-in-out infinite;
+          will-change: transform, opacity;
+        }
       `}</style>
     </main>
   );

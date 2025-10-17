@@ -7,15 +7,11 @@ type Article = {
   url: string;
   source: string;
   title: string;
-  published?: string;
+  published: string;
   body: string;
   fake_prob: number;
   flags: string[];
   word_count: number;
-  // optional ML fields from batch_infer:
-  heur_prob?: number;
-  ml_prob?: number | null;
-  final_prob?: number | null;
 };
 
 type ArticlesResponse = {
@@ -24,6 +20,9 @@ type ArticlesResponse = {
   page: number;
   page_size: number;
 };
+
+type SortBy = 'fake_prob' | 'published' | 'title';
+type Order = 'asc' | 'desc';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://127.0.0.1:8000';
 
@@ -34,8 +33,8 @@ export default function Home() {
   const [maxProb, setMaxProb] = useState<number | null>(null);
 
   // sorting / pagination
-  const [sortBy, setSortBy] = useState<'fake_prob' | 'published' | 'title'>('fake_prob');
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortBy, setSortBy] = useState<SortBy>('fake_prob');
+  const [order, setOrder] = useState<Order>('desc');
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
 
@@ -59,7 +58,7 @@ export default function Home() {
     return u.toString();
   };
 
-  const fetchArticles = async () => {
+  const fetchArticles = async (): Promise<void> => {
     setLoading(true);
     setErr(null);
     try {
@@ -68,8 +67,9 @@ export default function Home() {
       const data: ArticlesResponse = await res.json();
       setItems(data.items || []);
       setTotal(data.total || 0);
-    } catch (e: any) {
-      setErr(e?.message || 'Failed to load');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load';
+      setErr(msg);
       setItems([]);
       setTotal(0);
     } finally {
@@ -120,7 +120,7 @@ export default function Home() {
             transform: 'translate3d(-50%,-50%,0) scale(1)',
           }}
         />
-        {/* ripple 1 */}
+        {/* ripple 1 — your colors, but fade to 0 alpha (no “transparent”) + gentler scale */}
         <div
           className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[155vmax] h-[155vmax] rounded-full blur-2xl opacity-55 animate-ripple will-change-transform"
           style={{
@@ -129,7 +129,7 @@ export default function Home() {
             transform: 'translate3d(-50%,-50%,0)',
           }}
         />
-        {/* ripple 2 */}
+        {/* ripple 2 — your colors, slower, offset, fade out smoothly */}
         <div
           className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 w-[170vmax] h-[170vmax] rounded-full blur-2xl opacity-45 animate-ripple-slow will-change-transform"
           style={{
@@ -151,6 +151,12 @@ export default function Home() {
             >
               Paste URL
             </Link>
+            <Link
+              href="/paste"
+              className="rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 transition-transform hover:scale-105 active:scale-95"
+            >
+              Paste Text
+            </Link>
           </div>
         </div>
       </div>
@@ -158,29 +164,30 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4 py-8 md:py-12 grid gap-8">
         {/* HERO / CONTROLS BOX */}
         <section className="relative rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur p-6 md:p-8 shadow-lg">
+          {/* centered header in the box */}
           <div className="mx-auto max-w-3xl">
             <div className="flex flex-col items-center text-center">
               <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-                Explore coverage with quick heuristics + ML
+                Explore coverage with quick heuristics
               </h1>
               <p className="mt-2 text-sm md:text-base text-[--muted-foreground]">
-                This tool highlights writing cues and basic credibility hints from the articles you scrape.
-                It’s not a truth detector — treat the score as a signal.
+                This tool highlights writing cues and basic credibility hints from the articles that you scrape.
+                It’s not a truth detector — treat the score as a signal, not a surefire truth.
               </p>
             </div>
           </div>
 
-          {/* search row */}
+          {/* search row (live as you type) */}
           <div className="mx-auto mt-6 w-full max-w-2xl flex items-center justify-center gap-2">
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
               placeholder="Search headlines or text…"
               className="flex-1 min-w-0 rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-white/55 focus:outline-none focus:ring-2 focus:ring-[--brand]"
             />
           </div>
 
-          {/* reset + filters */}
+          {/* reset + filters row (one line on md+, wraps on small) */}
           <div className="mx-auto mt-4 w-full max-w-2xl flex items-center justify-center gap-3 flex-wrap md:flex-nowrap">
             <button
               onClick={handleReset}
@@ -198,7 +205,9 @@ export default function Home() {
                 max={1}
                 value={minProb ?? ''}
                 placeholder="e.g., 0.20"
-                onChange={(e) => setMinProb(e.target.value === '' ? null : Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setMinProb(e.target.value === '' ? null : Number(e.target.value))
+                }
                 className="w-36 md:w-40 rounded-md bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-white/50 focus:outline-none"
               />
             </div>
@@ -212,7 +221,9 @@ export default function Home() {
                 max={1}
                 value={maxProb ?? ''}
                 placeholder="e.g., 0.80"
-                onChange={(e) => setMaxProb(e.target.value === '' ? null : Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setMaxProb(e.target.value === '' ? null : Number(e.target.value))
+                }
                 className="w-36 md:w-40 rounded-md bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-white/50 focus:outline-none"
               />
             </div>
@@ -247,58 +258,50 @@ export default function Home() {
 
           {/* cards */}
           <div className="grid gap-4 md:grid-cols-2">
-            {items.map((a) => {
-              const score = a.final_prob ?? a.fake_prob; // prefer ML-blended
-              const tone =
-                score >= 0.6
-                  ? 'bg-red-500/20 text-red-300'
-                  : score >= 0.35
-                  ? 'bg-yellow-500/20 text-yellow-200'
-                  : 'bg-emerald-500/20 text-emerald-200';
-              return (
-                <a
-                  key={a.url}
-                  href={a.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
-                >
-                  <div className="p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs text-white/70">
-                        {a.published ? new Date(a.published).toLocaleString() : '—'}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {a.final_prob != null && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10">ML</span>
-                        )}
-                        <div
-                          title={`score: ${score.toFixed(3)}`}
-                          className={`px-2 py-1 rounded-md text-xs font-semibold ${tone}`}
-                        >
-                          {score.toFixed(2)}
-                        </div>
-                      </div>
+            {items.map((a) => (
+              <a
+                key={a.url}
+                href={a.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
+              >
+                <div className="p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs text-white/70">
+                      {a.published ? new Date(a.published).toLocaleString() : '—'}
                     </div>
-
-                    <h3 className="mt-2 text-lg font-semibold line-clamp-2">{a.title || '(no title)'}</h3>
-                    <p className="mt-2 text-white/80 text-sm line-clamp-3">{a.body}</p>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {a.flags?.slice(0, 3).map((f, i) => (
-                        <span
-                          key={i}
-                          className="text-[10px] uppercase tracking-wide rounded bg-white/5 px-2 py-1 text-white/70"
-                        >
-                          {f}
-                        </span>
-                      ))}
-                      <span className="ml-auto text-xs text-white/60">{a.source || '—'}</span>
+                    <div
+                      title={`score: ${a.fake_prob.toFixed(3)}`}
+                      className={`px-2 py-1 rounded-md text-xs font-semibold ${
+                        a.fake_prob >= 0.6
+                          ? 'bg-red-500/20 text-red-300'
+                          : a.fake_prob >= 0.35
+                          ? 'bg-yellow-500/20 text-yellow-200'
+                          : 'bg-emerald-500/20 text-emerald-200'
+                      }`}
+                    >
+                      {a.fake_prob.toFixed(2)}
                     </div>
                   </div>
-                </a>
-              );
-            })}
+
+                  <h3 className="mt-2 text-lg font-semibold line-clamp-2">{a.title || '(no title)'}</h3>
+                  <p className="mt-2 text-white/80 text-sm line-clamp-3">{a.body}</p>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {a.flags?.slice(0, 3).map((f, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] uppercase tracking-wide rounded bg-white/5 px-2 py-1 text-white/70"
+                      >
+                        {f}
+                      </span>
+                    ))}
+                    <span className="ml-auto text-xs text-white/60">{a.source || '—'}</span>
+                  </div>
+                </div>
+              </a>
+            ))}
 
             {!loading && !err && items.length === 0 && (
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-6 text-center text-white/75">
@@ -338,7 +341,9 @@ export default function Home() {
           <label className="text-xs text-white/70">Sort by</label>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              setSortBy(e.target.value as SortBy)
+            }
             className="rounded-md bg-white/5 border border-white/10 px-2 py-2 text-sm focus:outline-none"
           >
             <option value="fake_prob">Score</option>
@@ -349,7 +354,9 @@ export default function Home() {
           <label className="text-xs text-white/70">Order</label>
           <select
             value={order}
-            onChange={(e) => setOrder(e.target.value as any)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              setOrder(e.target.value as Order)
+            }
             className="rounded-md bg-white/5 border border-white/10 px-2 py-2 text-sm focus:outline-none"
           >
             <option value="desc">Desc</option>
@@ -359,7 +366,7 @@ export default function Home() {
           <label className="text-xs text-white/70">Page size</label>
           <select
             value={pageSize}
-            onChange={(e) => {
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
               const n = Number(e.target.value);
               setPageSize(n);
               setPage(1);
@@ -375,7 +382,7 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* smoother keyframes */}
+      {/* smoother keyframes (no end “snap”) */}
       <style jsx global>{`
         :root {
           --brand: rgb(66, 96, 136);
