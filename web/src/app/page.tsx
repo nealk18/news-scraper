@@ -152,7 +152,7 @@ export default function Home() {
           <div className="mx-auto max-w-3xl">
             <div className="flex flex-col items-center text-center">
               <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-                Find bias in text using Machine Learning
+                Find bias within texts using Machine Learning
               </h1>
               <p className="mt-2 text-sm md:text-base text-[--muted-foreground]">
                 Scores text based on bias signals and cues.  Use this as a tool, not to determine surefire truth.
