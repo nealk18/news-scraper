@@ -54,7 +54,6 @@ id_*.pub
 *.sqlite
 *.sqlite3
 *.db
-data/
 tmp/
 logs/
 *.log
@@ -74,8 +73,7 @@ dist/
 .envrc
 
 
-# ----- ML -----
-data/
+
 
 
 
