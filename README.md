@@ -1,8 +1,6 @@
 # News Credibility Scraper — Final Product
 NOTE: this project has been deployed, but is suspended on Render
 
-Scrape recent news links from a source site, extract clean article text, and assign a **heuristic credibility score**. A small **FastAPI** server exposes the results so a UI can consume them later.
-
 Scrape recent news links from a variety of sites, extract clean article text, and assign a score using Machine Learning, including a heatmap showing areas of high, medium, and low bias within the article.
 
 **Status:**   
